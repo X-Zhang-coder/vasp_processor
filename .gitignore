@@ -1,0 +1,8 @@
+*
+!*.*
+*.csv
+*.svg
+*.sh
+*.out
+*.xml
+versions/
