@@ -45,10 +45,10 @@ class vaspresult:
     Result of one vasp calculation
     """
 
-    def __init__(self, result_dir: str="./"):
+    def __init__(self, result_dir: str='./'):
 
         self.result_dir = result_dir
-        '''Dir of result files'''
+        '''Directory of result files'''
 
         self.basename = os.path.basename(os.path.abspath(result_dir))
         '''Name of the calculation from the dir basename'''
@@ -56,16 +56,29 @@ class vaspresult:
         self.steps = vaspresult.stepdata(result_dir=result_dir)
         '''Data of ion steps during calculation'''
 
-    def saveSteps(self):
+    def saveSteps(self, dir=None):
         '''
         To plot the step parameters and save figs and save data into a csv file
         '''
-        self.steps.saveSteps()
+        self.steps.plotSteps(dir)
+        self.steps.saveSteps(dir)
 
     class stepdata:
         '''
         Data of ion steps during calculation
         '''
+
+        data_type = ['step_energies', 'step_forces', 'step_distances', 'step_volumes']
+
+        data_title ={ 'step_energies': 'Energy',
+                      'step_forces': 'Max Force',
+                      'step_distances': 'RSM Distance',
+                      'step_volumes': 'Cell Volume' }
+        
+        data_unit = { 'step_energies': 'eV',
+                      'step_forces': 'eV/A',
+                      'step_distances': 'A',
+                      'step_volumes': 'A^3' }
 
         def __init__(self, result_dir: str="./"):
 
@@ -73,7 +86,11 @@ class vaspresult:
             '''Dir of result files'''
 
             self.basename = os.path.basename(os.path.abspath(result_dir))
+            '''Name of the calculation from the dir basename'''
 
+            self.ion_steps = None
+            '''Ion steps as an array, from 1 to the last step'''
+            
             self.step_energies = None
             '''Energy for each ion step'''
 
@@ -85,30 +102,31 @@ class vaspresult:
 
             self.step_volumes = None
             '''Volume of a cell for each ion step'''
-
+            
             self._initStepData()
 
-        def saveSteps(self):
+        def plotSteps(self, dir: str=None):
             '''
-            To plot the step parameters and save figs and save data into a csv file
+            To plot the parameters during ion steps save figs
             '''
-            ion_steps = np.arange(1, self.step_energies.shape[0] + 1)
-            plotData(ion_steps, self.step_energies, 
-                    os.path.join(self.result_dir, f'step_energy_{self.basename}.svg'),
-                    'Ion Step', 'Energy (eV)')
-            plotData(ion_steps, self.step_forces, 
-                    os.path.join(self.result_dir, f'step_force_{self.basename}.svg'),
-                    'Ion Step', 'Max Force (eV/A)')
-            plotData(ion_steps, self.step_distances, 
-                    os.path.join(self.result_dir, f'step_distance_{self.basename}.svg'),
-                    'Ion Step', 'RMSD From Initial (A)')
-            plotData(ion_steps, self.step_volumes, 
-                    os.path.join(self.result_dir, f'step_volume_{self.basename}.svg'),
-                    'Ion Step', 'Cell Volume (A^3)')
-            
-            steps = np.array((ion_steps, self.step_energies, self.step_forces, self.step_distances, self.step_volumes))
-            np.savetxt(os.path.join(self.result_dir, f'{self.basename}_step.csv'), steps.T, comments=' ',
-                    delimiter=',', header='Ion Step,Energy,Max Force,RMS Distance,Cell Volume\n,eV,eV/A,A,A^3\n')
+            if dir is None:
+                dir = self.result_dir
+
+            for data in vasp_data.stepdata.data_type:
+                exec(f'singlePlot(self.ion_steps, self.{data}, \
+                        os.path.join(dir, "{data}_{self.basename}.svg"), \
+                        "Ion Step", \
+                        "{vasp_data.stepdata.data_title[data]} ({vasp_data.stepdata.data_unit[data]})")')
+
+        def saveSteps(self, dir: str=None):
+            '''
+            To save the parameters during ion steps into a csv file
+            '''
+            if dir is None:
+                dir = self.result_dir
+            steps = np.array((self.ion_steps, self.step_energies, self.step_forces, self.step_distances, self.step_volumes))
+            np.savetxt(os.path.join(dir, f'{self.basename}_step.csv'), steps.T, comments=' ', delimiter=',', 
+                    header=f'Ion Step,{",".join(vasp_data.stepdata.data_title.values())}\n,{",".join(vasp_data.stepdata.data_unit.values())}\n{f",{self.basename}" * 4}\n')
 
         def _initStepData(self):
             '''
@@ -118,6 +136,7 @@ class vaspresult:
             self._getStepEnergies()
             self._getStepForces()
             self._getStepVolumes()
+            self.ion_steps = np.arange(1, self.step_energies.shape[0] + 1)
 
         def _getStepEnergies(self):
             '''
@@ -190,7 +209,36 @@ class vaspresult:
                     volumes.append(float(parts[-1]))
             self.step_volumes = np.array(volumes[1:])   # From ion step 1
 
-def plotData(x, y, fig_dir, xlab, ylab):
+
+class vaspgroup:
+    '''
+    Results of a group of vasp calculations
+    '''
+
+    def __init__(self, group_dir: str='./'):
+        
+        self.group_dir = group_dir
+        '''Directory of the group'''
+
+        self.group_name = os.path.basename(group_dir)
+        
+        self.result_dirs = [f.path for f in os.scandir(group_dir) if f.is_dir()]
+        '''Directory of the calculation results in the group'''
+
+        self.results = [vasp_data(d) for d in self.result_dirs]
+        '''Calculation results as a list'''
+
+    def stepCompare(self):
+        '''
+        To compare the ion steps among different calculaitons
+        '''
+        pass
+
+
+        
+
+
+def singlePlot(x: np.array, y: np.array, fig_dir: str, xlab: str, ylab: str):
     '''
     To plot data and save an svg fig
     '''
@@ -199,6 +247,18 @@ def plotData(x, y, fig_dir, xlab, ylab):
     plt.plot(x, y, '-o')
     plt.savefig(fig_dir)
     plt.cla()
+
+
+def multiPlot(xys: list, fig_dir: str, xlab: str, ylab: str):
+    '''
+    To plot multiple data in an svg fig
+    '''
+    plt.xlabel(xlab)
+    plt.ylabel(ylab)
+    for xy in xys:
+        plt.plot(xy[0], xy[1], '-o')
+    plt.savefig(fig_dir)
+    plt.cla
 
 
 if __name__ == '__main__':
