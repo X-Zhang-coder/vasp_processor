@@ -56,10 +56,10 @@ class vaspresult:
         self.steps = vaspresult.stepdata(result_dir=result_dir)
         '''Data of ion steps during calculation'''
 
-        self.energy = self.steps.step_energies[-1]
+        self.energy = self.steps.step_energy[-1]
         '''Energy of the final state'''
 
-        self.volume = self.steps.step_volumes[-1]
+        self.volume = self.steps.step_volume[-1]
         '''Cell volume of the final state'''
 
     def saveSteps(self, dir=None):
@@ -74,20 +74,20 @@ class vaspresult:
         Data of ion steps during calculation
         '''
 
-        data_type = ['step_energies', 'step_forces', 'step_distances', 'step_volumes']
+        data_type = ['step_energy', 'step_force', 'step_distance', 'step_volume']
 
         data_title = {
-            'step_energies': 'Energy',
-            'step_forces': 'Max Force',
-            'step_distances': 'RSM Distance',
-            'step_volumes': 'Cell Volume'
+            'step_energy': 'Energy',
+            'step_force': 'Max Force',
+            'step_distance': 'RSM Distance',
+            'step_volume': 'Cell Volume'
         }
         
         data_unit = {
-            'step_energies': 'eV',
-            'step_forces': 'eV/A',
-            'step_distances': 'A',
-            'step_volumes': 'A^3' 
+            'step_energy': 'eV',
+            'step_force': 'eV/A',
+            'step_distance': 'A',
+            'step_volume': 'A^3' 
         }
 
         def __init__(self, result_dir: str="./"):
@@ -101,16 +101,16 @@ class vaspresult:
             self.ion_steps = None
             '''Ion steps as an array, from 1 to the last step'''
             
-            self.step_energies = None
+            self.step_energy = None
             '''Energy for each ion step'''
 
-            self.step_forces = None
+            self.step_force = None
             '''Max force for each ion step'''
 
-            self.step_distances = None
+            self.step_distance = None
             '''Root mean square distance for each ion step from initial state'''
 
-            self.step_volumes = None
+            self.step_volume = None
             '''Volume of a cell for each ion step'''
             
             self._initStepData()
@@ -138,7 +138,8 @@ class vaspresult:
             '''
             if dir is None:
                 dir = self.result_dir
-            steps = np.array((self.ion_steps, self.step_energies, self.step_forces, self.step_distances, self.step_volumes))
+            #steps = np.array((self.ion_steps, self.step_energy, self.step_force, self.step_distance, self.step_volume))
+            steps = np.array((self.ion_steps, *[eval(f'self.{data}', {'self':self}) for data in vaspresult.stepdata.data_type]))
             np.savetxt(
                 os.path.join(dir, f'{self.basename}_step.csv'), steps.T, comments=' ', delimiter=',', 
                 header=f'Ion Step,{",".join(vaspresult.stepdata.data_title.values())}\n,\
@@ -153,7 +154,7 @@ class vaspresult:
             self._getStepEnergies()
             self._getStepForces()
             self._getStepVolumes()
-            self.ion_steps = np.arange(1, self.step_energies.shape[0] + 1)
+            self.ion_steps = np.arange(1, self.step_energy.shape[0] + 1)
 
         def _getStepEnergies(self):
             '''
@@ -166,7 +167,7 @@ class vaspresult:
                 if "E0" in line:
                     parts = line.split()
                     energies.append(float(parts[4]))
-            self.step_energies = np.array(energies)
+            self.step_energy = np.array(energies)
 
         def _getStepForces(self):
             '''
@@ -198,7 +199,7 @@ class vaspresult:
                         if fval > fmax:
                             fmax = fval
                     fmax_list.append(fmax)
-            self.step_forces = np.array(fmax_list)
+            self.step_force = np.array(fmax_list)
 
         def _getStepDistances(self):
             '''
@@ -211,7 +212,7 @@ class vaspresult:
             for structure in structures:
                 rmsd = np.sqrt(((structure.frac_coords - initial_structure.frac_coords) ** 2).sum(axis=1).mean())
                 distances.append(rmsd)
-            self.step_distances = np.array(distances)
+            self.step_distance = np.array(distances)
 
         def _getStepVolumes(self):
             '''
@@ -224,7 +225,7 @@ class vaspresult:
                 if "volume of cell" in line:
                     parts = line.split()
                     volumes.append(float(parts[-1]))
-            self.step_volumes = np.array(volumes[1:])   # From ion step 1
+            self.step_volume = np.array(volumes[1:])   # From ion step 1
 
 
 class vaspgroup:
