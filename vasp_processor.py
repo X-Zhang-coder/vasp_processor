@@ -74,20 +74,22 @@ class vaspresult:
         Data of ion steps during calculation
         '''
 
-        data_type = ['energy', 'force', 'distance', 'volume']
+        data_type = ['energy', 'force', 'distance', 'volume', 'ca_ratio']
 
         data_title = {
             'energy': 'Energy',
             'force': 'Max Force',
             'distance': 'RSM Distance',
-            'volume': 'Cell Volume'
+            'volume': 'Cell Volume',
+            'ca_ratio': 'c/a Ratio'
         }
         
         data_unit = {
             'energy': 'eV',
             'force': 'eV/A',
             'distance': 'A',
-            'volume': 'A^3' 
+            'volume': 'A^3',
+            'ca_ratio': ''
         }
 
         def __init__(self, result_dir: str="./"):
@@ -112,6 +114,15 @@ class vaspresult:
 
             self.volume = None
             '''Volume of a cell for each ion step'''
+
+            self.abc = None
+            '''Lattice constant for each ion step (a, b, c)'''
+
+            self.angle = None
+            '''Lattice angles for each ion step (alpha, beta, gamma)'''
+
+            self.ca_ratio = None
+            '''c/a for each ion step'''
             
             self._initStepData()
 
@@ -149,10 +160,9 @@ class vaspresult:
             '''
             To load and process the step data
             '''
-            self._getStepDistances()
+            self._getSteplattices()
             self._getStepEnergies()
             self._getStepForces()
-            self._getStepVolumes()
             self.ion_steps = np.arange(1, self.energy.shape[0] + 1)
 
         def _getStepEnergies(self):
@@ -200,31 +210,29 @@ class vaspresult:
                     fmax_list.append(fmax)
             self.force = np.array(fmax_list)
 
-        def _getStepDistances(self):
+        def _getSteplattices(self):
             '''
-            To get the root mean square distance for each ion step from initial state.
+            To get the lattice constant, angle, volume and distance for each ion step.
+            The distance means the root mean square distance for each ion step from initial state.
             '''
             initial_structure = Poscar.from_file(os.path.join(self.result_dir, 'POSCAR')).structure
             xdatcar = Xdatcar(os.path.join(self.result_dir, 'XDATCAR'))
             structures = xdatcar.structures
             distances = []
+            volumes = []
+            abcs = []
+            angles = []
             for structure in structures:
                 rmsd = np.sqrt(((structure.frac_coords - initial_structure.frac_coords) ** 2).sum(axis=1).mean())
                 distances.append(rmsd)
+                volumes.append(structure.lattice.volume)
+                abcs.append(structure.lattice.abc)
+                angles.append(structure.lattice.angles)
             self.distance = np.array(distances)
-
-        def _getStepVolumes(self):
-            '''
-            To get the cell volume for each ion step.
-            '''
-            with open(os.path.join(self.result_dir, 'OUTCAR'), 'r') as f:
-                lines = f.readlines()
-            volumes = []
-            for line in lines:
-                if "volume of cell" in line:
-                    parts = line.split()
-                    volumes.append(float(parts[-1]))
-            self.volume = np.array(volumes[1:])   # From ion step 1
+            self.abc = abcs
+            self.angle = angles
+            self.ca_ratio = [abc[2]/abc[0] for abc in abcs]
+            self.volume = volumes
 
 
 class vaspgroup:
