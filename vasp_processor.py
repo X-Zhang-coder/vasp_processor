@@ -56,6 +56,12 @@ class vaspresult:
         self.steps = vaspresult.stepdata(result_dir=result_dir)
         '''Data of ion steps during calculation'''
 
+        self.energy = self.steps.step_energies[-1]
+        '''Energy of the final state'''
+
+        self.volume = self.steps.step_volumes[-1]
+        '''Cell volume of the final state'''
+
     def saveSteps(self, dir=None):
         '''
         To plot the step parameters and save figs and save data into a csv file
@@ -70,15 +76,19 @@ class vaspresult:
 
         data_type = ['step_energies', 'step_forces', 'step_distances', 'step_volumes']
 
-        data_title ={ 'step_energies': 'Energy',
-                      'step_forces': 'Max Force',
-                      'step_distances': 'RSM Distance',
-                      'step_volumes': 'Cell Volume' }
+        data_title = {
+            'step_energies': 'Energy',
+            'step_forces': 'Max Force',
+            'step_distances': 'RSM Distance',
+            'step_volumes': 'Cell Volume'
+        }
         
-        data_unit = { 'step_energies': 'eV',
-                      'step_forces': 'eV/A',
-                      'step_distances': 'A',
-                      'step_volumes': 'A^3' }
+        data_unit = {
+            'step_energies': 'eV',
+            'step_forces': 'eV/A',
+            'step_distances': 'A',
+            'step_volumes': 'A^3' 
+        }
 
         def __init__(self, result_dir: str="./"):
 
@@ -112,11 +122,15 @@ class vaspresult:
             if dir is None:
                 dir = self.result_dir
 
-            for data in vasp_data.stepdata.data_type:
-                exec(f'singlePlot(self.ion_steps, self.{data}, \
+            for data in vaspresult.stepdata.data_type:
+                exec(
+                    f'singlePlot(\
+                        self.ion_steps, self.{data}, \
                         os.path.join(dir, "{data}_{self.basename}.svg"), \
                         "Ion Step", \
-                        "{vasp_data.stepdata.data_title[data]} ({vasp_data.stepdata.data_unit[data]})")')
+                        "{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})"\
+                    )'
+                )
 
         def saveSteps(self, dir: str=None):
             '''
@@ -125,8 +139,11 @@ class vaspresult:
             if dir is None:
                 dir = self.result_dir
             steps = np.array((self.ion_steps, self.step_energies, self.step_forces, self.step_distances, self.step_volumes))
-            np.savetxt(os.path.join(dir, f'{self.basename}_step.csv'), steps.T, comments=' ', delimiter=',', 
-                    header=f'Ion Step,{",".join(vasp_data.stepdata.data_title.values())}\n,{",".join(vasp_data.stepdata.data_unit.values())}\n{f",{self.basename}" * 4}\n')
+            np.savetxt(
+                os.path.join(dir, f'{self.basename}_step.csv'), steps.T, comments=' ', delimiter=',', 
+                header=f'Ion Step,{",".join(vaspresult.stepdata.data_title.values())}\n,\
+                    {",".join(vaspresult.stepdata.data_unit.values())}\n{f",{self.basename}" * 4}\n'
+            )
 
         def _initStepData(self):
             '''
@@ -220,23 +237,90 @@ class vaspgroup:
         self.group_dir = group_dir
         '''Directory of the group'''
 
-        self.group_name = os.path.basename(group_dir)
+        self.group_name = os.path.basename(os.path.abspath(group_dir))
+        '''Base name of the group'''
         
-        self.result_dirs = [f.path for f in os.scandir(group_dir) if f.is_dir()]
+        self.result_dirs = None
         '''Directory of the calculation results in the group'''
 
-        self.results = [vasp_data(d) for d in self.result_dirs]
+        self.results = None
         '''Calculation results as a list'''
+
+        self._readResults()
+        '''To read results and result_dirs'''
 
     def stepCompare(self):
         '''
         To compare the ion steps among different calculaitons
         '''
-        pass
-
-
+        for data in vaspresult.stepdata.data_type:
+            exec(
+                f'multiPlot(\
+                    [(result.steps.ion_steps, result.steps.{data}, result.basename) for result in self.results],\
+                        os.path.join(self.group_dir, "{data}_{self.group_name}.svg"),\
+                        "Ion Step",\
+                        "{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})"\
+                )'
+            )
         
+        for result in self.results:
+            result.steps.saveSteps(self.group_dir)
 
+    def finalCompare(self):
+        '''
+        To compare the final states among different calculaitons
+        '''
+        names = [result.basename for result in self.results]
+        type_data = [names]
+        x = range(len(names))
+        for data in vaspresult.stepdata.data_type:
+            y = eval(f'[result.steps.{data}[-1] for result in self.results]')
+            plt.xticks(x, names, rotation=7.5)
+            singlePlot(x, y, f'final_{data}_{self.group_name}.svg', 'Calculation',
+                       f'{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})')
+            type_data.append(y)
+        np.savetxt(
+            os.path.join(self.group_dir, f'final_states_{self.group_name}.csv'),
+            np.array(type_data).T,
+            fmt='%s',
+            delimiter=',',
+            header=f'\
+                Calculation,{",".join(vaspresult.stepdata.data_title.values())}\n\
+                ,{",".join(vaspresult.stepdata.data_unit.values())}\n\n',
+            comments=' '
+        )
+
+    def energyCompare(self):
+        '''
+        To compare the final energy of different results
+        '''
+        energies = np.array([result.energy for result in self.results])
+        names = np.array([result.basename for result in self.results])
+        x = np.arange(len(names))
+        plt.xticks(x, names, rotation=7.5)
+        plt.xlabel('Calculation')
+        plt.ylabel('Energy (eV)')
+        plt.plot(x, energies, '-o')
+        plt.savefig(self.group_dir)
+        plt.cla()
+
+
+    def _readResults(self):
+        '''
+        To read results and dirs
+        '''
+        raw_dirs = [f.path for f in os.scandir(self.group_dir) if f.is_dir()]
+        results = []
+        result_dirs = []
+        for dir in raw_dirs:
+            try:
+                results.append(vaspresult(dir))
+                result_dirs.append(dir)
+            except FileNotFoundError:
+                pass
+        self.results = results
+        self.result_dirs = result_dirs
+      
 
 def singlePlot(x: np.array, y: np.array, fig_dir: str, xlab: str, ylab: str):
     '''
@@ -256,11 +340,13 @@ def multiPlot(xys: list, fig_dir: str, xlab: str, ylab: str):
     plt.xlabel(xlab)
     plt.ylabel(ylab)
     for xy in xys:
-        plt.plot(xy[0], xy[1], '-o')
+        plt.plot(xy[0], xy[1], '-o', label=xy[2])
+    plt.legend(loc='best')
     plt.savefig(fig_dir)
-    plt.cla
+    plt.cla()
 
 
 if __name__ == '__main__':
-    vasp_data = vaspresult()
-    vasp_data.saveSteps()
+    vasp_group = vaspgroup()
+    vasp_group.stepCompare()
+    vasp_group.finalCompare()
