@@ -75,6 +75,7 @@ class vaspresult:
         '''
 
         data_type = ['energy', 'force', 'distance', 'volume', 'ca_ratio']
+        data_type_log = ['energy', 'force']
 
         data_title = {
             'energy': 'Energy',
@@ -270,6 +271,15 @@ class vaspgroup:
                         "{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})"\
                 )'
             )
+            exec(
+                f'multiPlot(\
+                    [(result.steps.ion_steps, result.steps.{data}, result.basename) for result in self.results],\
+                        os.path.join(self.group_dir, "step_{data}_{self.group_name}_log.svg"),\
+                        "Ion Step",\
+                        "{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})",\
+                        "log"\
+                )'
+            )
         
         for result in self.results:
             result.steps.saveSteps(self.group_dir)
@@ -330,23 +340,25 @@ class vaspgroup:
         self.result_dirs = result_dirs
       
 
-def singlePlot(x: np.array, y: np.array, fig_dir: str, xlab: str, ylab: str):
+def singlePlot(x: np.array, y: np.array, fig_dir: str, xlab: str, ylab: str, ysca: str='linear'):
     '''
     To plot data and save an svg fig
     '''
     plt.xlabel(xlab)
     plt.ylabel(ylab)
+    plt.yscale(ysca)
     plt.plot(x, y, '-o')
     plt.savefig(fig_dir)
     plt.cla()
 
 
-def multiPlot(xys: list, fig_dir: str, xlab: str, ylab: str):
+def multiPlot(xys: list, fig_dir: str, xlab: str, ylab: str, ysca: str='linear'):
     '''
     To plot multiple data in an svg fig
     '''
     plt.xlabel(xlab)
     plt.ylabel(ylab)
+    plt.yscale(ysca)
     for xy in xys:
         plt.plot(xy[0], xy[1], '-o', label=xy[2])
     plt.legend(loc='best')
