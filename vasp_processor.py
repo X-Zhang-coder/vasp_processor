@@ -271,6 +271,7 @@ class vaspgroup:
                         "{vaspresult.stepdata.data_title[data]} ({vaspresult.stepdata.data_unit[data]})"\
                 )'
             )
+            """
             exec(
                 f'multiPlot(\
                     [(result.steps.ion_steps, result.steps.{data}, result.basename) for result in self.results],\
@@ -280,6 +281,7 @@ class vaspgroup:
                         "log"\
                 )'
             )
+            """
         
         for result in self.results:
             result.steps.saveSteps(self.group_dir)
